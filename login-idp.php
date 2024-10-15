@@ -5,17 +5,20 @@
 namespace WPSAMLIDP;
 use WP_Error;
 
+$service = $_GET['service'] ?? '';
+
 $saml = retrieve_saml_request();
-if ( ! $saml ) {
+if ( ! $saml && ! $service ) {
 	wp_die( 'Invalid request', 400 );
 }
 
 // Current url, used by the auth redirect and the not-you link.
 $current_url = add_query_arg(
-	[
+	array_filter( [
 		'SAMLRequest' => urlencode( $_REQUEST['SAMLRequest'] ?? '' ),
 		'RelayState'  => urlencode( $_REQUEST['RelayState'] ?? '' ),
-	],
+		'service'     => urlencode( $service ),
+	] ),
 	get_idp_url()
 );
 
@@ -26,11 +29,16 @@ if ( ! is_user_logged_in() ) {
 }
 
 $saml_client = validate_saml_client(
-	$saml->getMessage()->getIssuer()->getValue(),
-	$saml->getMessage()->getAssertionConsumerServiceURL()
+	$saml ? $saml->getMessage()->getIssuer()->getValue() : $service,
+	$saml ? $saml->getMessage()->getAssertionConsumerServiceURL() : null
 );
 
-$saml_destination = $saml->getMessage()->getProviderName() ?: $saml->getMessage()->getIssuer()->getValue();
+$saml_destination = $saml_client['friendlyName'] ?? null;
+if ( $saml ) {
+	$saml_destination ??= $saml->getMessage()->getProviderName() ?: $saml->getMessage()->getIssuer()->getValue();
+} elseif ( $service ) {
+	$saml_destination ??= $service;
+}
 $saml_destination = preg_replace( '#^https?://#', '', $saml_destination );
 
 $errors = new WP_Error();
@@ -47,9 +55,14 @@ login_header( sprintf( __( 'Login to %s', 'wp-saml-idp' ), esc_html( $saml_desti
  * A nonce is included to limit CSRF type attacks.
  */
 echo '<form action="' . esc_url( get_idp_url('confirm') ) . '" method="GET" class="idp-login-confirm">';
-echo '<input type="hidden" name="SAMLRequest" value="' . esc_attr( wp_unslash( $_REQUEST['SAMLRequest'] ) ) . '">';
-echo '<input type="hidden" name="RelayState" value="' . esc_attr( wp_unslash( $_REQUEST['RelayState'] ?? '' ) ) . '">';
-echo '<input type="hidden" name="action" value="idp_confirm">'; // TODO: This duplicates the get args in the form action.
+foreach ( [ 'SAMLRequest', 'RelayState', 'service' ] as $key ) {
+	if ( ! empty( $_REQUEST[ $key ] ) ) {
+		echo '<input type="hidden" name="' . esc_attr( $key ) . '" value="' . esc_attr( wp_unslash( $_REQUEST[ $key ] ) ) . '">';
+	}
+}
+foreach ( wp_parse_args( wp_parse_url( get_idp_url('confirm'), PHP_URL_QUERY ) ) as $key => $value ) {
+	echo '<input type="hidden" name="' . esc_attr( $key ) . '" value="' . esc_attr( $value ) . '">';
+}
 wp_nonce_field( 'saml_confirm' );
 
 echo '<style>

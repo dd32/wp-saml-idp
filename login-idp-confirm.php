@@ -35,9 +35,10 @@ use \LightSaml\{
 	ClaimTypes
 };
 
-$saml = retrieve_saml_request();
+$saml    = retrieve_saml_request();
+$service = $_REQUEST['service'] ?? false;
 if (
-	! $saml ||
+	( ! $saml && ! $service ) ||
 	! isset( $_REQUEST['_wpnonce'] ) ||
 	! isset( $_REQUEST['idp_confirm'] ) ||
 	! is_user_logged_in() ||
@@ -47,14 +48,22 @@ if (
 }
 
 // User has confirmed, we can proceed with the redirect.
-$issuer  = $saml->getMessage()->getIssuer()->getValue();
-$acs_url = $saml->getMessage()->getAssertionConsumerServiceURL(); // NOTE: This will be validated by validate_saml_client()
+if ( $saml ) {
+	$issuer  = $saml->getMessage()->getIssuer()->getValue();
+	$acs_url = $saml->getMessage()->getAssertionConsumerServiceURL(); // NOTE: This will be validated by validate_saml_client()
+} else {
+	$issuer  = $service;
+	$acs_url = null;
+}
 
 // Validate the SAML client is acceptable.
 $saml_client = validate_saml_client( $issuer, $acs_url );
 if ( is_wp_error( $saml_client ) && $saml_client->has_errors() ) {
 	wp_die( $saml_client->get_error_message(), 500 );
 }
+
+// If it's not set, inherit from the Client.
+$acs_url ??= $saml_client['assertionConsumerService'] ?? '';
 
 // We now start constructing the SAML Response using LightSAML.
 $user         = wp_get_current_user();
@@ -84,6 +93,15 @@ $response
 	->setIssuer( new Issuer( get_idp_issuer() ) )
 ;
 
+$subjectConfirmationData = ( new SubjectConfirmationData() )
+	->setNotOnOrAfter( new DateTime( '+1 MINUTE' ) )
+	->setRecipient( $acs_url );
+
+// If this is in response to a SAMLRequest, set the ResponseTo, to avoid attacks.
+if ( $saml ) {
+	$subjectConfirmationData->setInResponseTo( $saml->getMessage()->getID() );
+}
+
 $assertion
 	->setId( LightSamlHelper::generateID() )
 	->setIssueInstant( new DateTime() )
@@ -95,12 +113,7 @@ $assertion
 			->addSubjectConfirmation(
 				( new SubjectConfirmation() )
 					->setMethod( SamlConstants::CONFIRMATION_METHOD_BEARER )
-					->setSubjectConfirmationData(
-						( new SubjectConfirmationData() )
-							->setInResponseTo( $saml->getMessage()->getID() )
-							->setNotOnOrAfter( new DateTime( '+1 MINUTE' ) )
-							->setRecipient( $acs_url )
-					)
+					->setSubjectConfirmationData( $subjectConfirmationData )
 			)
 	)
 	// Ensure that this can't be replayed in the future.
@@ -108,9 +121,7 @@ $assertion
 		( new Conditions() )
 			->setNotBefore( new DateTime() )
 			->setNotOnOrAfter( new DateTime( '+1 MINUTE' ) )
-			->addItem( new AudienceRestriction( [
-				$saml->getMessage()->getIssuer()->getValue()
-			] ) )
+			->addItem( new AudienceRestriction( [ $issuer ] ) )
 	)
 	// And claim the user just Auth'd.
 	->addItem(
@@ -159,7 +170,7 @@ $auto_submitting_post_form = ( new BindingFactory() )->create( SamlConstants::BI
 $messageContext            = new MessageContext();
 $messageContext->setMessage( $response );
 
-// Ensure we include the RelayState.
+// Ensure we include the RelayState, this can be used to validate that the SAML client expected this, or as the landing URL for the client.
 if ( isset( $_REQUEST['RelayState'] ) ) {
 	$message = $messageContext->getMessage();
 	$message->setRelayState( wp_unslash( $_REQUEST['RelayState'] ) );

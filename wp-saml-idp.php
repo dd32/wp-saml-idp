@@ -46,6 +46,22 @@ function get_idp_url( $endpoint = '' ) {
 }
 
 /**
+ * Retrieve the URL to login to a specific service.
+ *
+ * This URL can be used to initiate a idp-initiated login to a SP service.
+ *
+ * @param string $service
+ * @return string|false URL to login, false if unknown service.
+ */
+function get_login_to_service_url( $service ) {
+	if ( is_wp_error( validate_saml_client( $service ) ) ) {
+		return false;
+	}
+
+	return add_query_arg( 'service', urlencode( $service ), get_idp_url() );
+}
+
+/**
  * Retrieve the public and private keys for the IDP.
  *
  * @return object {
@@ -130,7 +146,10 @@ function validate_saml_client( $client, $acs_url = false ) {
 		return new WP_Error( 'invalid_acs', 'Invalid Authentication Client Service URL' );
 	}
 
-	return $clients[ $client ];
+	$return = $clients[ $client ];
+	$return['clientName'] = $client;
+
+	return $return;
 }
 
 function get_saml_clients() {
