@@ -33,7 +33,15 @@ $saml_client = validate_saml_client(
 	$saml ? $saml->getMessage()->getAssertionConsumerServiceURL() : null
 );
 
-$saml_destination = $saml_client['friendlyName'] ?? null;
+$errors = new WP_Error();
+if ( is_wp_error( $saml_client ) && $saml_client->has_errors() ) {
+	$errors->merge_from( $saml_client );
+}
+
+$saml_destination = '';
+if ( ! is_wp_error( $saml_client ) && isset( $saml_client['friendlyName'] ) ) {
+	$saml_destination = $saml_client['friendlyName'];
+}
 if ( $saml ) {
 	$saml_destination ??= $saml->getMessage()->getProviderName() ?: $saml->getMessage()->getIssuer()->getValue();
 } elseif ( $service ) {
@@ -41,12 +49,13 @@ if ( $saml ) {
 }
 $saml_destination = preg_replace( '#^https?://#', '', $saml_destination );
 
-$errors = new WP_Error();
-if ( is_wp_error( $saml_client ) && $saml_client->has_errors() ) {
-	$errors->merge_from( $saml_client );
-}
-
 login_header( sprintf( __( 'Login to %s', 'wp-saml-idp' ), esc_html( $saml_destination ) ), '', $errors );
+
+// Exit early if there are errors.
+if ( $errors->has_errors() ) {
+	login_footer();
+	exit;
+}
 
 /*
  * NOTE: This is a GET request, despite being a confirmation form.
