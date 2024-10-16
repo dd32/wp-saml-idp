@@ -155,10 +155,10 @@ foreach ( $user_details as $key => $value ) {
 	);
 }
 
-// Sign the response.
-$response->setSignature(
-	new SignatureWriter( get_idp_keys()->public, get_idp_keys()->private )
-);
+// Perform signing - Both the inner Assertion and the outer Response.
+$signer = new SignatureWriter( get_idp_keys()->public, get_idp_keys()->private );
+$assertion->setSignature( $signer );
+$response->setSignature( $signer );
 
 // Convert to XML
 $serializationContext = new SerializationContext();
