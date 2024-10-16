@@ -74,7 +74,7 @@ if ( ! $user ) {
 if ( ! empty( $saml_client['userInfo'] ) ) {
 	$user_details = $saml_client['userInfo'];
 	if ( is_callable( $user_details ) ) {
-		$user_details = $user_details( $user );
+		$user_details = $user_details( $user, $saml_client );
 	}
 }
 
