@@ -78,6 +78,16 @@ if ( ! empty( $saml_client['userInfo'] ) ) {
 	}
 }
 
+/**
+ * Filter the user details that will be sent in the SAML Response.
+ *
+ * @param array $user_details The user details to be sent.
+ * @param \WP_User $user The user being logged in.
+ * @param array $saml_client The SAML client details.
+ * @return array
+ */
+$user_details = apply_filters( 'saml_idp_user_details', $user_details, $user, $saml_client );
+
 // The bare basics.
 $user_details['username'] ??= $user->user_login;
 $user_details['email']    ??= $user->user_email;
