@@ -147,7 +147,7 @@ function validate_saml_client( $client, $acs_url = false ) {
 	}
 
 	$return = $clients[ $client ];
-	$return['clientName'] = $client;
+	$return['friendlyName'] = $client;
 
 	return $return;
 }
