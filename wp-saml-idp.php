@@ -1,6 +1,6 @@
 <?php
 namespace WPSAMLIDP;
-use WP_Error;
+use WP_Error, Throwable;
 
 // for retrieve_saml_request()
 use \Symfony\Component\HttpFoundation\Request as Symfony_Request;
@@ -135,12 +135,38 @@ function retrieve_saml_request() {
 		return $message;
 	}
 
-	// TODO: This is the only place that uses Symfony.
-	$symfony_request = Symfony_Request::createFromGlobals();
-	$binding         = (new BindingFactory)->getBindingByRequest( $symfony_request );
-	$message         = new MessageContext();
 
-	$binding->receive( $symfony_request, $message );
+
+	try {
+		// TODO: This is the only place that uses Symfony
+		$symfony_request = Symfony_Request::createFromGlobals();
+
+		$binding         = (new BindingFactory)->getBindingByRequest( $symfony_request );
+		$message         = new MessageContext();
+
+		$binding->receive( $symfony_request, $message );
+	} catch( Throwable $e ) {
+		// Avoid some issues where the URL is decoded, breaking the SAMLRequest param.
+		if ( ! empty( $_REQUEST['SAMLRequest'] ) && str_contains( $_REQUEST['SAMLRequest'], ' ' ) ) {
+			// not urlencode() as it's only spaces we're running into.
+			$original_param          = $_REQUEST['SAMLRequest'];
+			$_REQUEST['SAMLRequest'] = str_replace( ' ', '+', $_REQUEST['SAMLRequest'] );
+			$_GET['SAMLRequest']     = $_REQUEST['SAMLRequest'];
+
+			// litesaml doesn't use $_GET, etc, instead it parses $request->server->get('QUERY_STRING').
+			$_SERVER['QUERY_STRING'] = str_replace(
+				[ $original_param, $_REQUEST['SAMLRequest'] ], // We replace both the original and the fixed one.
+				urlencode( $_REQUEST['SAMLRequest'] ),         // And replace it with a urlencoded one.
+				$_SERVER['QUERY_STRING']
+			);
+
+			// Try again after fixing the SAMLRequest.
+			$symfony_request = Symfony_Request::createFromGlobals();
+			$binding         = (new BindingFactory)->getBindingByRequest( $symfony_request );
+			$message         = new MessageContext();
+			$binding->receive( $symfony_request, $message );
+		}
+	}
 
 	return $message;
 }
