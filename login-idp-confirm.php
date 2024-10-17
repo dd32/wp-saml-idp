@@ -40,11 +40,9 @@ $service = $_REQUEST['service'] ?? false;
 if (
 	( ! $saml && ! $service ) ||
 	! isset( $_REQUEST['_wpnonce'] ) ||
-	! isset( $_REQUEST['idp_confirm'] ) ||
-	! is_user_logged_in() ||
-	! wp_verify_nonce( $_REQUEST['_wpnonce'], 'saml_confirm' )
+	! is_user_logged_in()
 ) {
-	wp_die( 'Invalid request', 400 );
+	wp_die( 'Invalid request.', 400 );
 }
 
 // User has confirmed, we can proceed with the redirect.
@@ -54,6 +52,10 @@ if ( $saml ) {
 } else {
 	$issuer  = $service;
 	$acs_url = null;
+}
+
+if ( ! wp_verify_nonce( $_REQUEST['_wpnonce'], 'saml_confirm_' . $issuer ) ) {
+	wp_die( 'Invalid nonce.', 400 );
 }
 
 // Validate the SAML client is acceptable.

@@ -28,8 +28,10 @@ if ( ! is_user_logged_in() ) {
 	exit;
 }
 
+// Check the service is valid.
+$issuer      = $saml ? $saml->getMessage()->getIssuer()->getValue() : $service;
 $saml_client = validate_saml_client(
-	$saml ? $saml->getMessage()->getIssuer()->getValue() : $service,
+	$issuer,
 	$saml ? $saml->getMessage()->getAssertionConsumerServiceURL() : null
 );
 
@@ -72,7 +74,7 @@ foreach ( [ 'SAMLRequest', 'RelayState', 'service' ] as $key ) {
 foreach ( wp_parse_args( wp_parse_url( get_idp_url('confirm'), PHP_URL_QUERY ) ) as $key => $value ) {
 	echo '<input type="hidden" name="' . esc_attr( $key ) . '" value="' . esc_attr( $value ) . '">';
 }
-wp_nonce_field( 'saml_confirm' );
+wp_nonce_field( 'saml_confirm_' . $issuer );
 
 echo '<style>
 	.avatar-wrapper {

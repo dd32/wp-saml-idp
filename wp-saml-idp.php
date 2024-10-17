@@ -27,6 +27,18 @@ function login_form_idp_confirm() {
 
 add_action( 'login_form_idp', __NAMESPACE__ . '\login_form_idp' );
 function login_form_idp() {
+
+	// If this is a nonce'd confirmation, just go straight to confirmation instead of presenting the authorization screen.
+	if (
+		is_user_logged_in() &&
+		isset( $_REQUEST['service'] ) &&
+		isset( $_REQUEST['_wpnonce'] ) &&
+		empty( $_REQUEST['SAMLRequest'] ) &&
+		wp_verify_nonce( $_REQUEST['_wpnonce'], 'saml_confirm_' . wp_unslash( $_REQUEST['service'] ) )
+	) {
+		return login_form_idp_confirm();
+	}
+
 	include __DIR__ . '/login-idp.php';
 	exit;
 }
@@ -50,15 +62,21 @@ function get_idp_url( $endpoint = '' ) {
  *
  * This URL can be used to initiate a idp-initiated login to a SP service.
  *
- * @param string $service
+ * @param string $service    The registered service to login to.
+ * @param bool   $auto_login Whether to automatically login to the service, or to present an authorization screen.
  * @return string|false URL to login, false if unknown service.
  */
-function get_login_to_service_url( $service ) {
+function get_login_to_service_url( $service, $auto_login = false ) {
 	if ( is_wp_error( validate_saml_client( $service ) ) ) {
 		return false;
 	}
 
-	return add_query_arg( 'service', urlencode( $service ), get_idp_url() );
+	$url = add_query_arg( 'service', urlencode( $service ), get_idp_url() );
+	if ( $auto_login ) {
+		$url = wp_nonce_url( $url, "saml_confirm_{$service}" );
+	}
+
+	return $url;
 }
 
 /**
