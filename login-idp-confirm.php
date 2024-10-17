@@ -68,18 +68,15 @@ if ( is_wp_error( $saml_client ) && $saml_client->has_errors() ) {
 $acs_url ??= $saml_client['assertionConsumerService'] ?? '';
 
 // We now start constructing the SAML Response using LightSAML.
-$user         = wp_get_current_user();
-$user_details = [];
+$user = wp_get_current_user();
 if ( ! $user ) {
 	wp_die( 'Invalid request', 400 );
 }
-if ( ! empty( $saml_client['userInfo'] ) ) {
-	$user_details = $saml_client['userInfo'];
-	if ( is_callable( $user_details ) ) {
-		$user_details = $user_details( $user, $saml_client );
-	}
-}
 
+$user_details = [];
+if ( isset( $saml_client['userInfo'] ) && is_array( $saml_client['userInfo'] ) ) {
+	$user_details = $saml_client['userInfo'];
+}
 /**
  * Filter the user details that will be sent in the SAML Response.
  *
