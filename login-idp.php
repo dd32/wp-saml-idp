@@ -76,43 +76,88 @@ foreach ( wp_parse_args( wp_parse_url( get_idp_url('confirm'), PHP_URL_QUERY ) )
 }
 wp_nonce_field( 'saml_confirm_' . $issuer );
 
+/**
+ * Some users don't have a display name.
+ * If they don't, we'll use their username.
+ */
+function get_user_display_info() {
+	$user = wp_get_current_user();
+
+	if ( empty( $user->display_name ) ) {
+		return '<h2>' . esc_html( $user->user_login ) . '</h2>';
+	}
+
+	return '<h2>' . esc_html( $user->display_name ) . '</h2>' .
+	'<h3>' . esc_html( $user->user_login ) . '</h3>';
+}
+
 echo '<style>
 	.avatar-wrapper {
 		text-align: center;
-		margin-bottom: 1em;
+		margin-bottom: 24px;
 	}
+
 	img.avatar {
+		margin: 8px auto;
 		border-radius: 50%;
 	}
+
+	.avatar-wrapper h2 {
+		font-weight: 500;
+		font-size: 18px;
+	}
+
+	.avatar-wrapper h3 {
+		font-size: 14px;
+		font-weight: normal;
+		color: #656a71;
+	}
+
 	.continue input {
 		width: 100%;
 	}
-	.idp-login-confirm p {
-		margin: 1em 0;
+
+	.idp-login-confirm {
+		text-align: center;
 	}
+
+	.idp-login-confirm p {
+		margin: 1em 0 !important;
+	}
+
 	.idp-login-confirm .button-primary {
 		float: none;
 	}
+
+	.idp-login-confirm .continue + * {
+		font-size: 13px;
+	}
+
 </style>';
 
-echo '<div class="avatar-wrapper">', get_avatar( wp_get_current_user() ), '</div>';
-
-printf(
-	'<p>' . __( 'Do you wish to proceed to %1$s as %2$s?', 'wp-saml-idp' ) . '</p>',
-	'<code>' . esc_html( $saml_destination ) . '</code>',
-	'<code>' . esc_html( wp_get_current_user()->user_login ) . '</code>'
-);
+echo '<div class="avatar-wrapper">';
+echo get_avatar( wp_get_current_user() );
+echo get_user_display_info();
+echo '</div>';
 
 printf(
 	'<p class="continue"><input type="submit" name="idp_confirm" class="button-primary" value="%s"></p>',
+	/* translators: %s is the SAML destination */
 	esc_attr( sprintf( __( 'Log in to %s', 'wp-saml-idp' ), $saml_destination ) )
 );
 
-echo '<p><a href="' . esc_url( wp_logout_url( $current_url ) ) . '">' . __( 'Not you? Switch user.', 'wp-saml-idp' ) . '</a></p>';
-
-echo '<p><a href="' . esc_url( network_home_url('/') ) . '">' . __( 'No, take me home', 'wp-saml-idp' ) . '</a></p>';
+echo '<a href="' . esc_url( network_home_url('/') ) . '">' . __( 'No, take me home', 'wp-saml-idp' ) . '</a>';
 
 echo '</form>'; // .idp-login-confirm
+echo '<p id="nav">';
+printf(
+	'<a href="%s">%s</a>',
+	esc_url( wp_logout_url( $current_url ) ),
+	/* translators: %s is the user's display name */
+	sprintf( __( 'Not %s? Switch user.', 'wp-saml-idp' ), esc_html( wp_get_current_user()->user_login ) )
+);
+echo '</p>';
+
 login_footer();
 
 exit;
