@@ -53,7 +53,10 @@ function get_idp_url( $endpoint = '' ) {
 	return add_query_arg(
 		'action',
 		'idp' . ( $endpoint ? "_{$endpoint}" : '' ),
-		wp_login_url()
+		remove_query_arg(
+			'redirect_to',
+			wp_login_url()
+		)
 	);
 }
 
